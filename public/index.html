@@ -2141,8 +2141,43 @@
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
       }
 
+      const authenticate = async () => {
+        const password = localStorage.getItem("password");
+        const res = await fetch("/api/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ password: password }),
+        });
+        return res.ok;
+      };
+
       // Initialize when page loads
-      window.addEventListener("load", init);
+      window.onload = async () => {
+        // ask for username and password
+        if (localStorage.getItem("password-cf-logger")) {
+          // verify the password
+          const isOK = await authenticate();
+          if (isOK) {
+            init();
+          } else {
+            localStorage.removeItem("password-cf-logger");
+            alert("Invalid username or password, please try again.");
+          }
+        } else {
+          const password = prompt("Enter your password");
+          if (password) {
+            const isOK = await authenticate();
+            if (isOK) {
+              init();
+              localStorage.setItem("password-cf-logger", password);
+            } else {
+              alert("Invalid username or password");
+            }
+          }
+        }
+      };
 
       // Cleanup on page unload
       window.addEventListener("beforeunload", function () {

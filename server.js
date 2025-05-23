@@ -3,6 +3,7 @@ const WebSocket = require("ws");
 const fs = require("fs");
 const path = require("path");
 const { EventEmitter } = require("events");
+const bcrypt = require("bcrypt");
 require("dotenv").config();
 
 const app = express();
@@ -364,6 +365,42 @@ app.post("/api/disconnect", async (req, res) => {
 app.post("/api/enable-auto-connect", async (req, res) => {
   enableAutoConnect();
   res.json({ message: "Auto-connect enabled" });
+});
+
+app.post("/api/login", async (req, res) => {
+  const { password: hashedPasswordFromClient } = req.body;
+  console.log(hashedPasswordFromClient);
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (!adminPassword) {
+    console.error("ADMIN_PASSWORD environment variable is not set.");
+    return res.status(500).json({
+      error: "Server configuration error. Please contact administrator.",
+    });
+  }
+  if (!hashedPasswordFromClient) {
+    return res
+      .status(400)
+      .json({ error: "Password hash is required from client." });
+  }
+
+  try {
+    const match = await bcrypt.compare(adminPassword, hashedPasswordFromClient);
+    if (match) {
+      // IMPORTANT: In a real app, you'd issue a session token here.
+      // For this example, we'll just send a success message.
+      res.status(200).json({ message: "Login successful." });
+    } else {
+      res.status(401).json({ error: "Invalid credentials." });
+    }
+  } catch (error) {
+    console.error("Error during password comparison:", error);
+    // Log the specific bcrypt error if available, but don't send details to client
+    if (error.message) {
+      console.error("Bcrypt error message:", error.message);
+    }
+    res.status(500).json({ error: "Server error during login process." });
+  }
 });
 
 app.get("/api/logs", (req, res) => {
