@@ -2141,8 +2141,7 @@
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
       }
 
-      const authenticate = async () => {
-        const password = localStorage.getItem("password");
+      const authenticate = async (password) => {
         const res = await fetch("/api/login", {
           method: "POST",
           headers: {
@@ -2157,8 +2156,10 @@
       window.onload = async () => {
         // ask for username and password
         if (localStorage.getItem("password-cf-logger")) {
+          const passwordLocalStorage =
+            localStorage.getItem("password-cf-logger");
           // verify the password
-          const isOK = await authenticate();
+          const isOK = await authenticate(passwordLocalStorage);
           if (isOK) {
             init();
           } else {
@@ -2168,7 +2169,7 @@
         } else {
           const password = prompt("Enter your password");
           if (password) {
-            const isOK = await authenticate();
+            const isOK = await authenticate(password);
             if (isOK) {
               init();
               localStorage.setItem("password-cf-logger", password);
