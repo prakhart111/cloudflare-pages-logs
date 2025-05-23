@@ -1,0 +1,2162 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloudflare Pages Log Monitor</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      :root {
+        --bg-primary: #0f0f23;
+        --bg-secondary: #1a1a2e;
+        --bg-tertiary: #16213e;
+        --bg-card: #1e1e3f;
+        --accent-primary: #3b82f6;
+        --accent-secondary: #10b981;
+        --accent-danger: #ef4444;
+        --accent-warning: #f59e0b;
+        --text-primary: #f8fafc;
+        --text-secondary: #cbd5e1;
+        --text-muted: #94a3b8;
+        --border-color: #334155;
+        --border-light: #475569;
+        --success: #22c55e;
+        --error: #ef4444;
+        --warning: #f59e0b;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Inter", sans-serif;
+        background: linear-gradient(
+          135deg,
+          var(--bg-primary) 0%,
+          var(--bg-secondary) 100%
+        );
+        min-height: 100vh;
+        color: var(--text-primary);
+        overflow-x: hidden;
+      }
+
+      .container {
+        max-width: 100%;
+        margin: 0 auto;
+        background: var(--bg-card);
+        border-radius: 16px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        overflow: hidden;
+        margin: 20px;
+        border: 1px solid var(--border-color);
+      }
+
+      .header {
+        background: linear-gradient(135deg, var(--accent-primary), #6366f1);
+        color: white;
+        padding: 30px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .header::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(
+          45deg,
+          transparent 30%,
+          rgba(255, 255, 255, 0.1) 50%,
+          transparent 70%
+        );
+        transform: translateX(-100%);
+        animation: shimmer 3s infinite;
+      }
+
+      @keyframes shimmer {
+        0% {
+          transform: translateX(-100%);
+        }
+        100% {
+          transform: translateX(100%);
+        }
+      }
+
+      .header h1 {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        font-weight: 700;
+        position: relative;
+        z-index: 1;
+      }
+
+      .header p {
+        font-size: 1.1rem;
+        opacity: 0.9;
+        position: relative;
+        z-index: 1;
+      }
+
+      .dashboard {
+        padding: 30px;
+        background: var(--bg-secondary);
+      }
+
+      .status-section {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .status-card {
+        background: var(--bg-card);
+        border-radius: 12px;
+        padding: 24px;
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .status-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--accent-primary);
+        transition: all 0.3s ease;
+      }
+
+      .status-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        border-color: var(--border-light);
+      }
+
+      .status-card h3 {
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 1px;
+      }
+
+      .status-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+      }
+
+      .status-connected::before {
+        background: var(--success);
+      }
+
+      .status-connecting::before {
+        background: var(--warning);
+      }
+
+      .status-auto-reconnecting::before {
+        background: var(--warning);
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      .status-disconnected::before {
+        background: var(--text-muted);
+      }
+
+      .status-error::before {
+        background: var(--error);
+      }
+
+      .controls {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 30px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .btn::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.2),
+          transparent
+        );
+        transition: left 0.5s;
+      }
+
+      .btn:hover::before {
+        left: 100%;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+      }
+
+      .btn-primary {
+        background: var(--accent-primary);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background: #2563eb;
+      }
+
+      .btn-danger {
+        background: var(--error);
+        color: white;
+      }
+
+      .btn-danger:hover {
+        background: #dc2626;
+      }
+
+      .btn-secondary {
+        background: var(--bg-card);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+      }
+
+      .btn-secondary:hover {
+        background: var(--bg-tertiary);
+        border-color: var(--border-light);
+      }
+
+      .error-message {
+        background: rgba(239, 68, 68, 0.1);
+        color: var(--error);
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        display: none;
+      }
+
+      .error-message.show {
+        display: block;
+        animation: slideIn 0.3s ease;
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .logs-section {
+        background: var(--bg-card);
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+      }
+
+      .logs-header {
+        background: var(--bg-tertiary);
+        padding: 20px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 15px;
+      }
+
+      .logs-header h3 {
+        color: var(--text-primary);
+        font-size: 1.125rem;
+        font-weight: 600;
+      }
+
+      .log-controls {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .log-controls input,
+      .log-controls select {
+        padding: 8px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 0.875rem;
+      }
+
+      .log-controls input:focus,
+      .log-controls select:focus {
+        outline: none;
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+      }
+
+      .logs-container {
+        height: 500px;
+        overflow-y: auto;
+        background: var(--bg-secondary);
+      }
+
+      .logs-container::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .logs-container::-webkit-scrollbar-track {
+        background: var(--bg-tertiary);
+      }
+
+      .logs-container::-webkit-scrollbar-thumb {
+        background: var(--border-color);
+        border-radius: 4px;
+      }
+
+      .logs-container::-webkit-scrollbar-thumb:hover {
+        background: var(--border-light);
+      }
+
+      .log-table-container {
+        height: 100%;
+        overflow: auto;
+      }
+
+      .log-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+        background: var(--bg-secondary);
+      }
+
+      .log-table th {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        padding: 16px 12px;
+        text-align: left;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        border-right: 1px solid var(--border-color);
+        transition: background-color 0.2s ease;
+      }
+
+      .log-table th:hover {
+        background: var(--bg-card);
+      }
+
+      .log-table th:last-child {
+        border-right: none;
+      }
+
+      .log-table td {
+        padding: 12px;
+        border-bottom: 1px solid var(--border-color);
+        border-right: 1px solid var(--border-color);
+        vertical-align: top;
+        word-wrap: break-word;
+        max-width: 200px;
+        color: var(--text-secondary);
+      }
+
+      .log-table td:last-child {
+        border-right: none;
+        max-width: 300px;
+      }
+
+      .log-table tbody tr {
+        transition: background-color 0.2s ease;
+      }
+
+      .log-table tbody tr:hover {
+        background: var(--bg-card);
+      }
+
+      .log-table tbody tr.new-row {
+        background: rgba(34, 197, 94, 0.1);
+        animation: fadeToNormal 2s ease-out forwards;
+      }
+
+      .empty-state {
+        text-align: center;
+        color: var(--text-muted);
+        font-style: italic;
+        padding: 40px !important;
+      }
+
+      .outcome-success {
+        color: var(--success);
+        font-weight: 600;
+      }
+
+      .outcome-error {
+        color: var(--error);
+        font-weight: 600;
+      }
+
+      .outcome-exception {
+        color: var(--warning);
+        font-weight: 600;
+      }
+
+      .log-details {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 12px;
+        font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
+          "Courier New", monospace;
+        font-size: 0.75rem;
+        max-height: 100px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        color: var(--text-secondary);
+      }
+
+      .expand-btn {
+        background: var(--accent-primary);
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.75rem;
+        margin: 4px 4px 0 0;
+        transition: all 0.2s ease;
+        display: inline-block;
+      }
+      .expand-btn:hover {
+        background: #2563eb;
+        transform: translateY(-1px);
+      }
+
+      .log-entry {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-color);
+        word-wrap: break-word;
+        transition: background-color 0.2s ease;
+      }
+
+      .log-entry:hover {
+        background: var(--bg-card);
+      }
+
+      .log-entry.new {
+        background: rgba(34, 197, 94, 0.1);
+        animation: fadeToNormal 2s ease-out forwards;
+      }
+
+      @keyframes fadeToNormal {
+        to {
+          background: transparent;
+        }
+      }
+
+      .log-timestamp {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        margin-bottom: 6px;
+      }
+
+      .log-data {
+        color: var(--text-secondary);
+      }
+
+      .log-key {
+        color: var(--accent-primary);
+      }
+
+      .log-string {
+        color: var(--error);
+      }
+
+      .log-number {
+        color: var(--warning);
+      }
+
+      .log-boolean {
+        color: #a855f7;
+      }
+
+      .spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top: 2px solid var(--accent-primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .checkbox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+      }
+
+      .checkbox input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--accent-primary);
+      }
+
+      /* New: Styling for log file selector and live tail */
+      #log-file-select {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-size: 0.875rem;
+        max-width: 250px;
+      }
+
+      #log-file-select:focus {
+        outline: none;
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+      }
+
+      .live-tail-enabled {
+        color: var(--success) !important;
+        font-weight: 600;
+      }
+
+      .live-tail-disabled {
+        color: var(--text-muted) !important;
+      }
+
+      /* Sidebar Styles */
+      .sidebar {
+        position: fixed;
+        top: 0;
+        right: -500px;
+        width: 500px;
+        height: 100vh;
+        background: var(--bg-card);
+        border-left: 1px solid var(--border-color);
+        transition: right 0.3s ease;
+        z-index: 1000;
+        overflow-y: auto;
+        box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
+      }
+
+      .sidebar.open {
+        right: 0;
+      }
+
+      .sidebar-header {
+        padding: 20px;
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+
+      .sidebar-header h3 {
+        color: var(--text-primary);
+        font-size: 1.125rem;
+        font-weight: 600;
+      }
+
+      .close-btn {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+      }
+
+      .close-btn:hover {
+        color: var(--text-primary);
+        background: var(--bg-secondary);
+      }
+
+      .sidebar-content {
+        padding: 20px;
+      }
+
+      .sidebar-section {
+        margin-bottom: 24px;
+      }
+
+      .sidebar-section h4 {
+        color: var(--text-primary);
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .sidebar-detail {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 12px;
+        font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
+          "Courier New", monospace;
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+
+      .sidebar-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+        z-index: 999;
+      }
+
+      .sidebar-overlay.active {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .detail-badge {
+        display: inline-block;
+        background: var(--bg-tertiary);
+        color: var(--text-secondary);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        margin-right: 8px;
+        margin-bottom: 8px;
+      }
+
+      /* Pagination Styles */
+      .pagination-section {
+        background: var(--bg-tertiary);
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 15px;
+      }
+      .pagination-info {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+      }
+      .pagination-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .pagination-controls .btn {
+        padding: 6px 12px;
+        font-size: 0.8rem;
+        min-width: auto;
+      }
+      .page-numbers {
+        display: flex;
+        gap: 4px;
+      }
+      .page-number {
+        padding: 6px 10px;
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        transition: all 0.2s ease;
+        text-decoration: none;
+      }
+      .page-number:hover {
+        background: var(--bg-card);
+        color: var(--text-primary);
+        border-color: var(--border-light);
+      }
+      .page-number.active {
+        background: var(--accent-primary);
+        color: white;
+        border-color: var(--accent-primary);
+      }
+      .page-number.ellipsis {
+        background: transparent;
+        border: none;
+        cursor: default;
+        color: var(--text-muted);
+      }
+      .page-number.ellipsis:hover {
+        background: transparent;
+        color: var(--text-muted);
+        border: none;
+      }
+
+      .auto-connect-section {
+        background: var(--bg-card);
+        border-radius: 12px;
+        padding: 20px;
+        border: 1px solid var(--border-color);
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 15px;
+      }
+
+      .auto-connect-info {
+        flex: 1;
+      }
+
+      .auto-connect-info h3 {
+        color: var(--text-primary);
+        margin-bottom: 8px;
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+
+      .auto-connect-info p {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin: 0;
+      }
+
+      .toggle-switch {
+        position: relative;
+        width: 60px;
+        height: 30px;
+        background: var(--border-color);
+        border-radius: 15px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      .toggle-switch.active {
+        background: var(--accent-primary);
+      }
+
+      .toggle-switch .toggle-slider {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 24px;
+        height: 24px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.3s ease;
+      }
+
+      .toggle-switch.active .toggle-slider {
+        transform: translateX(30px);
+      }
+
+      .retry-info {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        margin-top: 8px;
+      }
+
+      .retry-info.show {
+        display: block;
+      }
+
+      @media (max-width: 768px) {
+        .dashboard {
+          padding: 20px;
+        }
+
+        .controls {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .status-section {
+          grid-template-columns: 1fr;
+        }
+
+        .logs-header {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .log-controls {
+          justify-content: stretch;
+        }
+
+        .sidebar {
+          width: 100%;
+          right: -100%;
+        }
+
+        .container {
+          margin: 10px;
+          border-radius: 12px;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .header h1 {
+          font-size: 2rem;
+        }
+
+        .header p {
+          font-size: 1rem;
+        }
+
+        .log-controls {
+          flex-direction: column;
+        }
+
+        .log-controls input,
+        .log-controls select {
+          width: 100%;
+        }
+      }
+
+      /* JSON Syntax Highlighting Styles */
+      .json-key {
+        color: #79c0ff;
+        font-weight: 500;
+      }
+
+      .json-string {
+        color: #a5d6ff;
+      }
+
+      .json-number {
+        color: #79c0ff;
+      }
+
+      .json-boolean {
+        color: #ff7b72;
+        font-weight: 500;
+      }
+
+      .json-null {
+        color: #8b949e;
+        font-style: italic;
+      }
+
+      .json-punctuation {
+        color: #c9d1d9;
+      }
+
+      .json-bracket {
+        color: #f0f6fc;
+        font-weight: bold;
+      }
+
+      .sidebar-detail.json-formatted {
+        line-height: 1.4;
+        font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
+          "Courier New", monospace;
+        font-size: 0.8rem;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 16px;
+        color: var(--text-secondary);
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Sidebar Overlay -->
+    <div
+      class="sidebar-overlay"
+      id="sidebar-overlay"
+      onclick="closeSidebar()"
+    ></div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <h3>Log Details</h3>
+        <button class="close-btn" onclick="closeSidebar()">&times;</button>
+      </div>
+      <div class="sidebar-content" id="sidebar-content">
+        <p style="color: var(--text-muted); text-align: center; padding: 40px">
+          Select a log entry to view details
+        </p>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="header">
+        <h1>🌐 Cloudflare Pages Monitor</h1>
+        <p>Real-time log collection and monitoring dashboard</p>
+      </div>
+
+      <div class="dashboard">
+        <div class="status-section">
+          <div class="status-card" id="connection-status">
+            <h3>Connection Status</h3>
+            <div class="status-value" id="status-text">Disconnected</div>
+          </div>
+
+          <!-- <div class="status-card">
+            <h3>Logs Collected</h3>
+            <div class="status-value" id="log-count">0</div>
+          </div> -->
+
+          <div class="status-card">
+            <h3>Log File</h3>
+            <div class="status-value" id="log-file" style="font-size: 0.8rem">
+              Loading...
+            </div>
+          </div>
+
+          <div class="status-card">
+            <h3>WebSocket URL</h3>
+            <div
+              class="status-value"
+              id="ws-url"
+              style="font-size: 0.7rem; word-break: break-all"
+            >
+              Not connected
+            </div>
+          </div>
+        </div>
+
+        <div class="error-message" id="error-message"></div>
+
+        <div class="auto-connect-section">
+          <div class="auto-connect-info">
+            <h3>Auto-Connect</h3>
+            <p>Automatically reconnect when disconnected</p>
+            <div class="retry-info" id="retry-info" style="display: none">
+              Retry attempts: 0/2
+            </div>
+          </div>
+          <div
+            class="toggle-switch"
+            id="auto-connect-switch"
+            onclick="toggleAutoConnect()"
+          >
+            <div class="toggle-slider"></div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button class="btn btn-secondary" onclick="clearLogs()">
+            Clear Display
+          </button>
+          <label class="checkbox">
+            <input type="checkbox" id="auto-scroll" checked />
+            Auto-scroll
+          </label>
+        </div>
+
+        <div class="logs-section">
+          <div class="logs-header">
+            <h3>Live Logs</h3>
+            <div class="log-controls">
+              <select id="log-file-select" style="min-width: 200px">
+                <option value="">Loading files...</option>
+              </select>
+              <label class="checkbox">
+                <input type="checkbox" id="live-tail" checked />
+                Live Log Tail
+              </label>
+              <input type="text" id="log-filter" placeholder="Filter logs..." />
+              <select id="per-page-select">
+                <option value="10">10 per page</option>
+                <option value="25" selected>25 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
+              </select>
+              <button
+                class="btn btn-secondary"
+                onclick="downloadLogs()"
+                style="padding: 8px 16px; font-size: 0.8rem"
+              >
+                Download Logs
+              </button>
+            </div>
+          </div>
+          <div
+            class="pagination-section"
+            id="pagination-section"
+            style="display: none"
+          >
+            <div class="pagination-info">
+              <span id="pagination-info-text">Showing 1-25 of 100 logs</span>
+            </div>
+            <div class="pagination-controls">
+              <button
+                class="btn btn-secondary"
+                id="first-page-btn"
+                onclick="goToPage(1)"
+              >
+                First
+              </button>
+              <button
+                class="btn btn-secondary"
+                id="prev-page-btn"
+                onclick="goToPreviousPage()"
+              >
+                Previous
+              </button>
+              <div class="page-numbers" id="page-numbers">
+                <!-- Page numbers will be inserted here -->
+              </div>
+              <button
+                class="btn btn-secondary"
+                id="next-page-btn"
+                onclick="goToNextPage()"
+              >
+                Next
+              </button>
+              <button
+                class="btn btn-secondary"
+                id="last-page-btn"
+                onclick="goToLastPage()"
+              >
+                Last
+              </button>
+            </div>
+          </div>
+          <div class="logs-container" id="logs-container">
+            <div class="log-table-container">
+              <table class="log-table" id="log-table">
+                <thead>
+                  <tr>
+                    <th style="width: 80px">#</th>
+                    <th>Timestamp</th>
+                    <th>Event Type</th>
+                    <th>Outcome</th>
+                    <th>Script Name</th>
+                    <th>Duration (ms)</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody id="log-table-body">
+                  <tr>
+                    <td colspan="7" class="empty-state">
+                      Waiting for connection...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let eventSource = null;
+      let logContainer = document.getElementById("log-table-body");
+      let logCount = 0;
+      let allLogs = [];
+      let currentPage = 1;
+      let perPage = 25;
+      let totalPages = 0;
+      let pagination = null;
+      let isPaginationMode = false;
+      let selectedLogFile = ""; // New: tracks currently selected log file
+      let isLiveTailEnabled = true; // New: tracks live tail state
+      let availableLogFiles = []; // New: stores list of available log files
+
+      // JSON Syntax Highlighter Function
+      function formatJsonWithSyntaxHighlighting(obj, indent = 0) {
+        const indentStr = "  ".repeat(indent);
+        const nextIndentStr = "  ".repeat(indent + 1);
+
+        if (obj === null) {
+          return '<span class="json-null">null</span>';
+        }
+
+        if (typeof obj === "string") {
+          // Escape HTML and highlight as string
+          const escaped = obj
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+          return `<span class="json-string">"${escaped}"</span>`;
+        }
+
+        if (typeof obj === "number") {
+          return `<span class="json-number">${obj}</span>`;
+        }
+
+        if (typeof obj === "boolean") {
+          return `<span class="json-boolean">${obj}</span>`;
+        }
+
+        if (Array.isArray(obj)) {
+          if (obj.length === 0) {
+            return '<span class="json-bracket">[]</span>';
+          }
+
+          let result = '<span class="json-bracket">[</span>\n';
+          obj.forEach((item, index) => {
+            result +=
+              nextIndentStr +
+              formatJsonWithSyntaxHighlighting(item, indent + 1);
+            if (index < obj.length - 1) {
+              result += '<span class="json-punctuation">,</span>';
+            }
+            result += "\n";
+          });
+          result += indentStr + '<span class="json-bracket">]</span>';
+          return result;
+        }
+
+        if (typeof obj === "object") {
+          const keys = Object.keys(obj);
+          if (keys.length === 0) {
+            return '<span class="json-bracket">{}</span>';
+          }
+
+          let result = '<span class="json-bracket">{</span>\n';
+          keys.forEach((key, index) => {
+            const escapedKey = key
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;");
+            result +=
+              nextIndentStr + `<span class="json-key">"${escapedKey}"</span>`;
+            result += '<span class="json-punctuation">: </span>';
+            result += formatJsonWithSyntaxHighlighting(obj[key], indent + 1);
+            if (index < keys.length - 1) {
+              result += '<span class="json-punctuation">,</span>';
+            }
+            result += "\n";
+          });
+          result += indentStr + '<span class="json-bracket">}</span>';
+          return result;
+        }
+
+        // Fallback for other types
+        return String(obj);
+      }
+
+      // Initialize the dashboard
+      function init() {
+        connectEventSource();
+        loadInitialStatus();
+        loadLogFiles(); // New: load available log files
+        loadRecentLogs();
+        setupEventListeners();
+      }
+
+      // Setup event listeners
+      function setupEventListeners() {
+        const filterInput = document.getElementById("log-filter");
+        const perPageSelect = document.getElementById("per-page-select");
+        const logFileSelect = document.getElementById("log-file-select");
+        const liveTailCheckbox = document.getElementById("live-tail");
+
+        filterInput.addEventListener("input", applyFilters);
+
+        if (perPageSelect) {
+          perPageSelect.addEventListener("change", onPerPageChange);
+        }
+
+        if (logFileSelect) {
+          logFileSelect.addEventListener("change", onLogFileChange);
+        }
+
+        if (liveTailCheckbox) {
+          liveTailCheckbox.addEventListener("change", onLiveTailToggle);
+        }
+      }
+
+      // Connect to SSE stream
+      function connectEventSource() {
+        if (eventSource) {
+          eventSource.close();
+        }
+
+        eventSource = new EventSource("/api/events");
+
+        eventSource.onmessage = function (event) {
+          const data = JSON.parse(event.data);
+
+          switch (data.type) {
+            case "status":
+              updateStatus(data.payload);
+              break;
+            case "log":
+              addLogEntry(data.payload);
+              break;
+            case "error":
+              showError(data.payload);
+              break;
+          }
+        };
+
+        eventSource.onerror = function (event) {
+          console.error("EventSource failed:", event);
+          setTimeout(connectEventSource, 5000);
+        };
+      }
+
+      // Load initial status
+      async function loadInitialStatus() {
+        try {
+          const response = await fetch("/api/status");
+          const status = await response.json();
+          updateStatus(status);
+        } catch (error) {
+          console.error("Failed to load status:", error);
+        }
+      }
+
+      // Load logs with pagination
+      async function loadLogs(page = 1, per_page = 25) {
+        try {
+          let url = `/api/logs?page=${page}&per_page=${per_page}`;
+
+          // Add file parameter if a specific file is selected
+          if (selectedLogFile) {
+            url += `&file=${encodeURIComponent(selectedLogFile)}`;
+          }
+
+          const response = await fetch(url);
+          const result = await response.json();
+
+          if (result.logs) {
+            // Paginated response
+            isPaginationMode = true;
+            currentPage = page;
+            perPage = per_page;
+            pagination = result.pagination;
+            totalPages = result.pagination.totalPages;
+
+            allLogs = result.logs.map((log) => ({
+              ...log,
+              id: Date.now() + Math.random(),
+            }));
+
+            renderTable();
+            updatePaginationUI();
+            showPaginationSection(true);
+
+            // Update UI to show which file is being displayed
+            updateLogsHeaderTitle(result.file, result.isCurrentFile);
+          } else {
+            // Legacy response (backward compatibility)
+            isPaginationMode = false;
+            allLogs = result.map((log) => ({
+              ...log,
+              id: Date.now() + Math.random(),
+            }));
+            renderTable();
+            showPaginationSection(false);
+          }
+        } catch (error) {
+          console.error("Failed to load logs:", error);
+        }
+      }
+
+      // New: Update logs header title to show current file
+      function updateLogsHeaderTitle(fileName, isCurrentFile) {
+        const header = document.querySelector(".logs-header h3");
+        if (header) {
+          if (isCurrentFile && isLiveTailEnabled) {
+            header.textContent = "Live Logs (Current)";
+          } else if (isCurrentFile) {
+            header.textContent = "Logs (Current)";
+          } else {
+            header.textContent = `Logs (${fileName})`;
+          }
+        }
+      }
+
+      // Load recent logs (initial load)
+      async function loadRecentLogs() {
+        await loadLogs(1, perPage);
+      }
+
+      // Show/hide pagination section
+      function showPaginationSection(show) {
+        const paginationSection = document.getElementById("pagination-section");
+        if (paginationSection) {
+          paginationSection.style.display = show ? "flex" : "none";
+        }
+      }
+
+      // Update pagination UI
+      function updatePaginationUI() {
+        if (!pagination) return;
+
+        // Update pagination info
+        const infoText = document.getElementById("pagination-info-text");
+        if (infoText) {
+          infoText.textContent = `Showing ${pagination.startIndex}-${pagination.endIndex} of ${pagination.totalLogs} logs`;
+        }
+
+        // Update buttons
+        const firstBtn = document.getElementById("first-page-btn");
+        const prevBtn = document.getElementById("prev-page-btn");
+        const nextBtn = document.getElementById("next-page-btn");
+        const lastBtn = document.getElementById("last-page-btn");
+
+        if (firstBtn) firstBtn.disabled = !pagination.hasPrevPage;
+        if (prevBtn) prevBtn.disabled = !pagination.hasPrevPage;
+        if (nextBtn) nextBtn.disabled = !pagination.hasNextPage;
+        if (lastBtn) lastBtn.disabled = !pagination.hasNextPage;
+
+        // Update page numbers
+        renderPageNumbers();
+      }
+
+      // Render page numbers
+      function renderPageNumbers() {
+        const pageNumbersContainer = document.getElementById("page-numbers");
+        if (!pageNumbersContainer) return;
+
+        pageNumbersContainer.innerHTML = "";
+
+        if (totalPages <= 1) return;
+
+        const maxVisiblePages = 5;
+        const current = currentPage;
+        const total = totalPages;
+
+        let startPage = Math.max(1, current - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(total, startPage + maxVisiblePages - 1);
+
+        // Adjust start if we're near the end
+        if (endPage - startPage + 1 < maxVisiblePages) {
+          startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        }
+
+        // Add first page and ellipsis if needed
+        if (startPage > 1) {
+          pageNumbersContainer.appendChild(createPageNumber(1));
+          if (startPage > 2) {
+            pageNumbersContainer.appendChild(createEllipsis());
+          }
+        }
+
+        // Add visible page numbers
+        for (let i = startPage; i <= endPage; i++) {
+          pageNumbersContainer.appendChild(createPageNumber(i, i === current));
+        }
+
+        // Add ellipsis and last page if needed
+        if (endPage < total) {
+          if (endPage < total - 1) {
+            pageNumbersContainer.appendChild(createEllipsis());
+          }
+          pageNumbersContainer.appendChild(createPageNumber(total));
+        }
+      }
+
+      // Create page number element
+      function createPageNumber(pageNum, isActive = false) {
+        const pageElement = document.createElement("span");
+        pageElement.className = `page-number ${isActive ? "active" : ""}`;
+        pageElement.textContent = pageNum;
+        pageElement.onclick = () => goToPage(pageNum);
+        return pageElement;
+      }
+
+      // Create ellipsis element
+      function createEllipsis() {
+        const ellipsis = document.createElement("span");
+        ellipsis.className = "page-number ellipsis";
+        ellipsis.textContent = "...";
+        return ellipsis;
+      }
+
+      // Pagination navigation functions
+      function goToPage(page) {
+        if (page !== currentPage && page >= 1 && page <= totalPages) {
+          loadLogs(page, perPage);
+        }
+      }
+
+      function goToPreviousPage() {
+        if (currentPage > 1) {
+          goToPage(currentPage - 1);
+        }
+      }
+
+      function goToNextPage() {
+        if (currentPage < totalPages) {
+          goToPage(currentPage + 1);
+        }
+      }
+
+      function goToLastPage() {
+        goToPage(totalPages);
+      }
+
+      // Per page change handler
+      function onPerPageChange() {
+        const perPageSelect = document.getElementById("per-page-select");
+        if (perPageSelect) {
+          perPage = parseInt(perPageSelect.value);
+          if (isPaginationMode) {
+            loadLogs(1, perPage); // Reset to first page
+          }
+        }
+      }
+
+      // Update status display
+      function updateStatus(status) {
+        const statusCard = document.getElementById("connection-status");
+        const statusText = document.getElementById("status-text");
+        const logFileEl = document.getElementById("log-file");
+        const wsUrlEl = document.getElementById("ws-url");
+        const autoConnectSwitch = document.getElementById(
+          "auto-connect-switch"
+        );
+        const retryInfo = document.getElementById("retry-info");
+        const liveTailCheckbox = document.getElementById("live-tail");
+
+        // Update status text and card styling
+        let displayStatus = status.status;
+        if (status.status === "auto-reconnecting") {
+          displayStatus = "Auto-Reconnecting";
+        } else {
+          displayStatus =
+            status.status.charAt(0).toUpperCase() + status.status.slice(1);
+        }
+
+        statusText.textContent = displayStatus;
+        statusCard.className = `status-card status-${status.status}`;
+
+        // Update auto-connect toggle
+        if (autoConnectSwitch) {
+          if (status.autoConnectEnabled) {
+            autoConnectSwitch.classList.add("active");
+          } else {
+            autoConnectSwitch.classList.remove("active");
+          }
+        }
+
+        // Update live tail checkbox styling based on connection status and selection
+        if (liveTailCheckbox) {
+          const liveTailLabel = liveTailCheckbox.closest(".checkbox");
+          if (liveTailLabel) {
+            liveTailLabel.classList.remove(
+              "live-tail-enabled",
+              "live-tail-disabled"
+            );
+
+            const currentFile = availableLogFiles.find(
+              (f) => f.name === selectedLogFile
+            );
+            const isViewingCurrentFile = currentFile && currentFile.isToday;
+
+            if (
+              isLiveTailEnabled &&
+              isViewingCurrentFile &&
+              status.status === "connected"
+            ) {
+              liveTailLabel.classList.add("live-tail-enabled");
+            } else if (
+              isLiveTailEnabled &&
+              (!isViewingCurrentFile || status.status !== "connected")
+            ) {
+              liveTailLabel.classList.add("live-tail-disabled");
+            }
+          }
+        }
+
+        // Update retry information
+        if (retryInfo) {
+          if (
+            (status.status === "auto-reconnecting" ||
+              status.status === "error") &&
+            status.reconnectAttempts > 0
+          ) {
+            retryInfo.style.display = "block";
+            retryInfo.textContent = `Retry attempts: ${
+              status.reconnectAttempts
+            }/${status.maxReconnectAttempts || 2}`;
+          } else {
+            retryInfo.style.display = "none";
+          }
+        }
+
+        // Update log file path
+        if (status.logFilePath) {
+          const fileName = status.logFilePath.split(/[\\\/]/).pop();
+          logFileEl.textContent = fileName;
+        }
+
+        // Update WebSocket URL
+        if (status.wsUrl) {
+          wsUrlEl.textContent = status.wsUrl;
+        } else {
+          wsUrlEl.textContent = "Not connected";
+        }
+
+        // Show error if present
+        if (status.error) {
+          showError(status.error);
+        } else {
+          hideError();
+        }
+      }
+
+      // Add log entry to display
+      function addLogEntry(logData, isNew = true) {
+        // Only add new logs if live tail is enabled and we're viewing the current file
+        const currentFile = availableLogFiles.find(
+          (f) => f.name === selectedLogFile
+        );
+        const isViewingCurrentFile = currentFile && currentFile.isToday;
+
+        if (!isLiveTailEnabled || !isViewingCurrentFile) {
+          // If live tail is disabled or we're not viewing current file, just refresh file list
+          // to update file sizes and don't add the log to display
+          loadLogFiles();
+          return;
+        }
+
+        // In pagination mode, new logs are only added to the current view if we're on page 1
+        if (isPaginationMode && currentPage !== 1) {
+          // Optionally show a notification that new logs are available
+          return;
+        }
+
+        const newLog = {
+          timestamp: new Date().toISOString(),
+          data: logData,
+          id: Date.now() + Math.random(),
+          isNew: isNew,
+        };
+
+        if (isPaginationMode) {
+          // In pagination mode, refresh the current page to get updated logs
+          loadLogs(currentPage, perPage);
+        } else {
+          // Legacy mode: add to local array
+          allLogs.push(newLog);
+
+          // Limit logs in memory (keep last 200)
+          if (allLogs.length > 200) {
+            allLogs = allLogs.slice(-200);
+          }
+
+          renderTable();
+        }
+      }
+
+      // Render the log table
+      function renderTable() {
+        const tbody = document.getElementById("log-table-body");
+        const filterValue = document
+          .getElementById("log-filter")
+          .value.toLowerCase();
+
+        // Apply filters
+        let filteredLogs = allLogs;
+        if (filterValue) {
+          filteredLogs = allLogs.filter(
+            (log) =>
+              JSON.stringify(log.data).toLowerCase().includes(filterValue) ||
+              log.timestamp.toLowerCase().includes(filterValue)
+          );
+        }
+
+        // Clear table
+        tbody.innerHTML = "";
+
+        if (filteredLogs.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="7" class="empty-state">No logs available</td></tr>';
+          return;
+        }
+
+        // Add rows
+        filteredLogs.forEach((log, index) => {
+          const row = createLogRow(log, index);
+          tbody.appendChild(row);
+        });
+
+        // Auto-scroll if enabled and not filtered
+        if (
+          document.getElementById("auto-scroll").checked &&
+          !filterValue &&
+          !isPaginationMode
+        ) {
+          const container = document.getElementById("logs-container");
+          container.scrollTop = container.scrollHeight;
+        }
+      }
+
+      // Create a log table row
+      function createLogRow(log, index) {
+        const row = document.createElement("tr");
+        if (log.isNew) {
+          row.classList.add("new-row");
+          // Remove the new-row class after animation
+          setTimeout(() => row.classList.remove("new-row"), 2000);
+        }
+
+        const logData = log.data;
+        const eventData = logData.event || {};
+        const request = eventData.request || {};
+        const response = eventData.response || {};
+
+        // Calculate serial number based on pagination
+        let serialNumber;
+        if (isPaginationMode && pagination) {
+          serialNumber = (currentPage - 1) * perPage + index + 1;
+        } else {
+          serialNumber = index + 1;
+        }
+
+        // Extract key information from the new schema
+        const timestamp = new Date(log.timestamp).toLocaleString();
+        const eventType = request.method || "unknown";
+        const outcome = logData.outcome || "unknown";
+        const scriptName = logData.scriptName || "N/A";
+        const wallTime = logData.wallTime || 0;
+        const cpuTime = logData.cpuTime || 0;
+        const duration = `${wallTime}ms (CPU: ${cpuTime}ms)`;
+
+        // Format outcome with styling
+        const outcomeClass =
+          outcome === "ok"
+            ? "outcome-success"
+            : outcome === "exception"
+            ? "outcome-exception"
+            : "outcome-error";
+
+        // Create detailed view
+        const details = createDetailsView(logData, log.id);
+
+        row.innerHTML = `
+          <td style="text-align: center; color: var(--text-muted); font-weight: 500;">${serialNumber}</td>
+          <td>${timestamp}</td>
+          <td>${eventType}</td>
+          <td><span class="${outcomeClass}">${outcome}</span></td>
+          <td>${scriptName}</td>
+          <td>${duration}</td>
+          <td>${details}</td>
+        `;
+
+        return row;
+      }
+
+      // Create details view for a log entry
+      function createDetailsView(data, logId) {
+        const summary = extractSummary(data);
+
+        let buttons = [];
+
+        // Add Show Logs button if logs array is not empty
+        if (data.logs && Array.isArray(data.logs) && data.logs.length > 0) {
+          buttons.push(
+            `<button class="expand-btn" onclick="showLogsInSidebar('${logId}')">Show Logs</button>`
+          );
+        }
+
+        // Add Show Exceptions button if exceptions array is not empty
+        if (
+          data.exceptions &&
+          Array.isArray(data.exceptions) &&
+          data.exceptions.length > 0
+        ) {
+          buttons.push(
+            `<button class="expand-btn" onclick="showExceptionsInSidebar('${logId}')">Show Exceptions</button>`
+          );
+        }
+
+        // Always add Show Full JSON button
+        buttons.push(
+          `<button class="expand-btn" onclick="showFullJsonInSidebar('${logId}')">Show Full JSON</button>`
+        );
+
+        return `
+          <div>${summary}</div>
+          <div style="margin-top: 8px;">${buttons.join(" ")}</div>
+        `;
+      }
+
+      // Extract summary information from log data
+      function extractSummary(data) {
+        const event = data.event || {};
+        const request = event.request || {};
+        const response = event.response || {};
+
+        let summary = [];
+
+        if (request.method) summary.push(`${request.method}`);
+        if (response.status) summary.push(`Status: ${response.status}`);
+        if (data.exceptions && data.exceptions.length > 0) {
+          summary.push(`${data.exceptions.length} Exception(s)`);
+        }
+        if (data.logs && data.logs.length > 0) {
+          summary.push(`${data.logs.length} Log(s)`);
+        }
+
+        return summary.join(" | ") || "No summary available";
+      }
+
+      // Show logs in sidebar
+      function showLogsInSidebar(logId) {
+        const log = allLogs.find((l) => l.id.toString() === logId);
+        if (!log) return;
+
+        const sidebar = document.getElementById("sidebar");
+        const overlay = document.getElementById("sidebar-overlay");
+        const content = document.getElementById("sidebar-content");
+
+        let sidebarHTML = `
+          <div class="sidebar-section">
+            <h4>Application Logs</h4>
+            <div class="detail-badge">Count: ${log.data.logs.length}</div>
+            <div class="detail-badge">Timestamp: ${new Date(
+              log.timestamp
+            ).toLocaleString()}</div>
+          </div>
+        `;
+
+        if (log.data.logs && log.data.logs.length > 0) {
+          sidebarHTML += `
+            <div class="sidebar-section">
+              <h4>Log Entries</h4>
+              <div class="sidebar-detail json-formatted">${formatJsonWithSyntaxHighlighting(
+                log.data.logs
+              )}</div>
+            </div>
+          `;
+        }
+
+        content.innerHTML = sidebarHTML;
+        sidebar.classList.add("open");
+        overlay.classList.add("active");
+        document.body.style.overflow = "hidden";
+      }
+
+      // Show exceptions in sidebar
+      function showExceptionsInSidebar(logId) {
+        const log = allLogs.find((l) => l.id.toString() === logId);
+        if (!log) return;
+
+        const sidebar = document.getElementById("sidebar");
+        const overlay = document.getElementById("sidebar-overlay");
+        const content = document.getElementById("sidebar-content");
+
+        let sidebarHTML = `
+          <div class="sidebar-section">
+            <h4>Exceptions</h4>
+            <div class="detail-badge">Count: ${log.data.exceptions.length}</div>
+            <div class="detail-badge">Timestamp: ${new Date(
+              log.timestamp
+            ).toLocaleString()}</div>
+          </div>
+        `;
+
+        if (log.data.exceptions && log.data.exceptions.length > 0) {
+          sidebarHTML += `
+            <div class="sidebar-section">
+              <h4>Exception Details</h4>
+              <div class="sidebar-detail json-formatted">${formatJsonWithSyntaxHighlighting(
+                log.data.exceptions
+              )}</div>
+            </div>
+          `;
+        }
+
+        content.innerHTML = sidebarHTML;
+        sidebar.classList.add("open");
+        overlay.classList.add("active");
+        document.body.style.overflow = "hidden";
+      }
+
+      // Show full JSON in sidebar (renamed from showInSidebar)
+      function showFullJsonInSidebar(logId) {
+        const log = allLogs.find((l) => l.id.toString() === logId);
+        if (!log) return;
+
+        const sidebar = document.getElementById("sidebar");
+        const overlay = document.getElementById("sidebar-overlay");
+        const content = document.getElementById("sidebar-content");
+
+        const eventData = log.data.event || {};
+        const request = eventData.request || {};
+        const response = eventData.response || {};
+
+        // Build sidebar content
+        let sidebarHTML = `
+          <div class="sidebar-section">
+            <h4>Overview</h4>
+            <div class="detail-badge">Outcome: ${
+              log.data.outcome || "unknown"
+            }</div>
+            <div class="detail-badge">Wall Time: ${
+              log.data.wallTime || 0
+            }ms</div>
+            <div class="detail-badge">CPU Time: ${log.data.cpuTime || 0}ms</div>
+            <div class="detail-badge">Timestamp: ${new Date(
+              log.timestamp
+            ).toLocaleString()}</div>
+          </div>
+        `;
+
+        if (request.url || request.method) {
+          sidebarHTML += `
+            <div class="sidebar-section">
+              <h4>Request</h4>
+              <div class="sidebar-detail json-formatted">${formatJsonWithSyntaxHighlighting(
+                request
+              )}</div>
+            </div>
+          `;
+        }
+
+        if (response.status) {
+          sidebarHTML += `
+            <div class="sidebar-section">
+              <h4>Response</h4>
+              <div class="sidebar-detail json-formatted">${formatJsonWithSyntaxHighlighting(
+                response
+              )}</div>
+            </div>
+          `;
+        }
+
+        sidebarHTML += `
+          <div class="sidebar-section">
+            <h4>Complete Log Data</h4>
+            <div class="sidebar-detail json-formatted">${formatJsonWithSyntaxHighlighting(
+              log.data
+            )}</div>
+          </div>
+        `;
+
+        content.innerHTML = sidebarHTML;
+        sidebar.classList.add("open");
+        overlay.classList.add("active");
+        document.body.style.overflow = "hidden";
+      }
+
+      // Close sidebar
+      function closeSidebar() {
+        const sidebar = document.getElementById("sidebar");
+        const overlay = document.getElementById("sidebar-overlay");
+
+        sidebar.classList.remove("open");
+        overlay.classList.remove("active");
+        document.body.style.overflow = "auto";
+      }
+
+      // Toggle details view (kept for backward compatibility)
+      function toggleDetails(id) {
+        const detailsEl = document.getElementById(id);
+        const btn = detailsEl.nextElementSibling.nextElementSibling;
+
+        if (detailsEl.style.display === "none") {
+          detailsEl.style.display = "block";
+          btn.textContent = "Hide Details";
+        } else {
+          detailsEl.style.display = "none";
+          btn.textContent = "Show Details";
+        }
+      }
+
+      // Apply filters
+      function applyFilters() {
+        renderTable();
+      }
+
+      // Show error message
+      function showError(error) {
+        const errorEl = document.getElementById("error-message");
+        errorEl.textContent = error;
+        errorEl.classList.add("show");
+      }
+
+      // Hide error message
+      function hideError() {
+        const errorEl = document.getElementById("error-message");
+        errorEl.classList.remove("show");
+      }
+
+      // Toggle auto-connect functionality
+      async function toggleAutoConnect() {
+        const autoConnectSwitch = document.getElementById(
+          "auto-connect-switch"
+        );
+        const isCurrentlyEnabled =
+          autoConnectSwitch.classList.contains("active");
+
+        try {
+          if (isCurrentlyEnabled) {
+            // Disable auto-connect by disconnecting
+            const response = await fetch("/api/disconnect", { method: "POST" });
+            const result = await response.json();
+            console.log(result.message);
+          } else {
+            // Enable auto-connect
+            const response = await fetch("/api/enable-auto-connect", {
+              method: "POST",
+            });
+            const result = await response.json();
+            console.log(result.message);
+          }
+        } catch (error) {
+          showError("Failed to toggle auto-connect: " + error.message);
+        }
+      }
+
+      // Legacy connect function (kept for compatibility but now enables auto-connect)
+      async function connect() {
+        try {
+          await fetch("/api/enable-auto-connect", { method: "POST" });
+        } catch (error) {
+          showError("Failed to enable auto-connect: " + error.message);
+        }
+      }
+
+      // Legacy disconnect function (now disables auto-connect)
+      async function disconnect() {
+        try {
+          const response = await fetch("/api/disconnect", { method: "POST" });
+          const result = await response.json();
+          console.log(result.message);
+        } catch (error) {
+          showError("Failed to disconnect: " + error.message);
+        }
+      }
+
+      // Clear log display
+      function clearLogs() {
+        allLogs = [];
+        renderTable();
+      }
+
+      // Download logs
+      async function downloadLogs() {
+        try {
+          let url = "/api/logs?limit=1000";
+
+          // Add file parameter if a specific file is selected
+          if (selectedLogFile) {
+            url += `&file=${encodeURIComponent(selectedLogFile)}`;
+          }
+
+          const response = await fetch(url);
+          const result = await response.json();
+
+          // Handle both old and new response formats
+          const logs = result.logs || result;
+
+          const dataStr = JSON.stringify(logs, null, 2);
+          const dataBlob = new Blob([dataStr], { type: "application/json" });
+          const url_obj = URL.createObjectURL(dataBlob);
+
+          const link = document.createElement("a");
+          link.href = url_obj;
+
+          // Use the selected file name for download, or default to current date
+          const fileName = selectedLogFile
+            ? selectedLogFile.replace(".jsonl", ".json")
+            : `cf-logs-${new Date().toISOString().split("T")[0]}.json`;
+          link.download = fileName;
+          link.click();
+
+          URL.revokeObjectURL(url_obj);
+        } catch (error) {
+          showError("Failed to download logs: " + error.message);
+        }
+      }
+
+      // Periodically refresh log files list to keep it updated
+      setInterval(() => {
+        loadLogFiles();
+      }, 30000); // Refresh every 30 seconds
+
+      // New: Load available log files
+      async function loadLogFiles() {
+        try {
+          const response = await fetch("/api/log-files");
+          availableLogFiles = await response.json();
+          updateLogFileSelector();
+        } catch (error) {
+          console.error("Failed to load log files:", error);
+        }
+      }
+
+      // New: Update the log file selector dropdown
+      function updateLogFileSelector() {
+        const logFileSelect = document.getElementById("log-file-select");
+        if (!logFileSelect) return;
+
+        logFileSelect.innerHTML = "";
+
+        if (availableLogFiles.length === 0) {
+          logFileSelect.innerHTML =
+            '<option value="">No log files found</option>';
+          return;
+        }
+
+        availableLogFiles.forEach((file) => {
+          const option = document.createElement("option");
+          option.value = file.name;
+          option.textContent = `${file.name}${
+            file.isToday ? " (Today)" : ""
+          } - ${formatFileSize(file.size)}`;
+
+          // Auto-select today's file if live tail is enabled and no file is manually selected
+          if (file.isToday && isLiveTailEnabled && !selectedLogFile) {
+            option.selected = true;
+            selectedLogFile = file.name;
+          }
+
+          logFileSelect.appendChild(option);
+        });
+
+        // If no file was auto-selected, select the first (newest) file
+        if (!selectedLogFile && availableLogFiles.length > 0) {
+          selectedLogFile = availableLogFiles[0].name;
+          logFileSelect.value = selectedLogFile;
+        }
+      }
+
+      // New: Handle log file selection change
+      function onLogFileChange() {
+        const logFileSelect = document.getElementById("log-file-select");
+        if (!logFileSelect) return;
+
+        selectedLogFile = logFileSelect.value;
+
+        // If user manually selects a file, disable live tail if it's not today's file
+        const selectedFile = availableLogFiles.find(
+          (f) => f.name === selectedLogFile
+        );
+        if (selectedFile && !selectedFile.isToday) {
+          const liveTailCheckbox = document.getElementById("live-tail");
+          if (liveTailCheckbox) {
+            liveTailCheckbox.checked = false;
+            isLiveTailEnabled = false;
+          }
+        }
+
+        // Load logs from selected file
+        loadLogs(1, perPage);
+      }
+
+      // New: Handle live tail toggle
+      function onLiveTailToggle() {
+        const liveTailCheckbox = document.getElementById("live-tail");
+        if (!liveTailCheckbox) return;
+
+        isLiveTailEnabled = liveTailCheckbox.checked;
+
+        if (isLiveTailEnabled) {
+          // Switch to today's file
+          const todayFile = availableLogFiles.find((f) => f.isToday);
+          if (todayFile) {
+            selectedLogFile = todayFile.name;
+            const logFileSelect = document.getElementById("log-file-select");
+            if (logFileSelect) {
+              logFileSelect.value = selectedLogFile;
+            }
+            loadLogs(1, perPage);
+          }
+        }
+      }
+
+      // New: Format file size for display
+      function formatFileSize(bytes) {
+        if (bytes === 0) return "0 B";
+        const k = 1024;
+        const sizes = ["B", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+      }
+
+      // Initialize when page loads
+      window.addEventListener("load", init);
+
+      // Cleanup on page unload
+      window.addEventListener("beforeunload", function () {
+        if (eventSource) {
+          eventSource.close();
+        }
+      });
+
+      // Close sidebar on escape key
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+          closeSidebar();
+        }
+      });
+    </script>
+  </body>
+</html>
