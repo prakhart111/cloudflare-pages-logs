@@ -1766,6 +1766,22 @@
         return summary.join(" | ") || "No summary available";
       }
 
+      // New helper function to render individual message content
+      function renderMessageContent(messageItem) {
+        if (typeof messageItem === "string") {
+          // Escape HTML characters in strings
+          const element = document.createElement("div");
+          element.innerText = messageItem;
+          return element.innerHTML;
+        }
+        if (typeof messageItem === "object" && messageItem !== null) {
+          return `<div class="sidebar-detail json-formatted" style="margin-top: 5px; background: var(--bg-secondary);">${formatJsonWithSyntaxHighlighting(
+            messageItem
+          )}</div>`;
+        }
+        return String(messageItem);
+      }
+
       // Show logs in sidebar
       function showLogsInSidebar(logId) {
         const log = allLogs.find((l) => l.id.toString() === logId);
@@ -1786,12 +1802,53 @@
         `;
 
         if (log.data.logs && log.data.logs.length > 0) {
+          let logEntriesTable = `
+            <table class="log-table" style="width: 100%; margin-top: 10px;">
+              <thead>
+                <tr>
+                  <th style="width: 80px;">Level</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+              <tbody>
+          `;
+
+          log.data.logs.forEach((entry) => {
+            let messageContent = "";
+            if (Array.isArray(entry.message)) {
+              messageContent = entry.message
+                .map(renderMessageContent)
+                .join("<br>");
+            } else {
+              messageContent = renderMessageContent(entry.message);
+            }
+
+            logEntriesTable += `
+              <tr>
+                <td style="text-transform: capitalize;">${
+                  entry.level || "log"
+                }</td>
+                <td>${messageContent}</td>
+              </tr>
+            `;
+          });
+
+          logEntriesTable += `
+              </tbody>
+            </table>
+          `;
+
           sidebarHTML += `
             <div class="sidebar-section">
               <h4>Log Entries</h4>
-              <div class="sidebar-detail json-formatted">${formatJsonWithSyntaxHighlighting(
-                log.data.logs
-              )}</div>
+              ${logEntriesTable}
+            </div>
+          `;
+        } else {
+          sidebarHTML += `
+            <div class="sidebar-section">
+              <h4>Log Entries</h4>
+              <p style="color: var(--text-muted);">No application logs recorded for this event.</p>
             </div>
           `;
         }
