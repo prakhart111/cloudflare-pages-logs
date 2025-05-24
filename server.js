@@ -52,16 +52,6 @@ if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir);
 }
 
-// Log file path
-const logFilePath = path.join(
-  logsDir,
-  `cf-logs-${new Date()
-    .toLocaleString("en-GB", { timeZone: "Asia/Kolkata" })
-    .split(",")[0]
-    .split("/")
-    .join("-")}.jsonl`
-);
-
 // Middleware
 app.use(express.static("public"));
 app.use(express.json());
@@ -81,7 +71,8 @@ function saveLogToFile(logData) {
       timestamp: new Date().toISOString(),
       data: logData,
     };
-    fs.appendFileSync(logFilePath, JSON.stringify(logEntry) + "\n");
+    const currentLogFile = path.join(logsDir, getCurrentLogFileName());
+    fs.appendFileSync(currentLogFile, JSON.stringify(logEntry) + "\n");
     logCount++;
 
     // Emit status update with the new log count
@@ -337,7 +328,7 @@ app.get("/api/status", (req, res) => {
     status: connectionStatus,
     error: lastError,
     logCount,
-    logFilePath,
+    logFilePath: path.join(logsDir, getCurrentLogFileName()),
     wsUrl: WS_URL,
     autoConnectEnabled,
     reconnectAttempts,
@@ -426,7 +417,7 @@ app.get("/api/logs", (req, res) => {
       }
     } else {
       // Default to current log file
-      targetLogFile = logFilePath;
+      targetLogFile = path.join(logsDir, getCurrentLogFileName());
     }
 
     if (fs.existsSync(targetLogFile)) {
@@ -468,7 +459,8 @@ app.get("/api/logs", (req, res) => {
           endIndex: Math.min(endIndex, totalLogs),
         },
         file: path.basename(targetLogFile),
-        isCurrentFile: targetLogFile === logFilePath,
+        isCurrentFile:
+          targetLogFile === path.join(logsDir, getCurrentLogFileName()),
       });
     } else {
       res.json({
@@ -486,7 +478,8 @@ app.get("/api/logs", (req, res) => {
         file: requestedFile
           ? path.basename(targetLogFile)
           : getCurrentLogFileName(),
-        isCurrentFile: targetLogFile === logFilePath,
+        isCurrentFile:
+          targetLogFile === path.join(logsDir, getCurrentLogFileName()),
       });
     }
   } catch (error) {
@@ -549,7 +542,9 @@ app.get("/", (req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Logs will be saved to: ${logFilePath}`);
+  console.log(
+    `Logs will be saved to: ${path.join(logsDir, getCurrentLogFileName())}`
+  );
 
   // Auto-connect on server start
   console.log("Starting auto-connect...");
