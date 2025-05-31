@@ -200,22 +200,23 @@ async function connectWebSocket(isAutoReconnect = false) {
           jsonData = JSON.parse(data);
         }
 
-        // Filter logs: only process/save if both 'logs' and 'exceptions' fields are present and non-empty arrays
-        const logsField = jsonData.logs;
-        const exceptionsField = jsonData.exceptions;
+        // More lenient filtering: save all logs that have basic event data
+        const hasEventData = jsonData.logs || jsonData.exceptions;
 
-        const logsArePopulated =
-          Array.isArray(logsField) && logsField.length > 0;
-        const exceptionsArePopulated =
-          Array.isArray(exceptionsField) && exceptionsField.length > 0;
-
-        // User wants to IGNORE if EITHER logs field is empty OR exceptions field is empty.
-        if (logsArePopulated || exceptionsArePopulated) {
+        if (hasEventData) {
           saveLogToFile(jsonData);
           logManager.emit("newLog", jsonData);
+          console.log(
+            `Log saved: ${new Date().toISOString()} - Event: ${
+              jsonData.event?.request?.method || "unknown"
+            }`
+          );
         } else {
-          // Optional: For server-side debugging to see what's being filtered.
-          // console.log("Ignoring log due to empty or missing logs/exceptions fields:", JSON.stringify(jsonData));
+          // Log what's being filtered for debugging
+          console.log(
+            "Filtered log (no event data):",
+            JSON.stringify(jsonData).substring(0, 200) + "..."
+          );
         }
       } catch (error) {
         console.error("Error parsing WebSocket message:", error);
