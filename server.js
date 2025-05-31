@@ -201,22 +201,19 @@ async function connectWebSocket(isAutoReconnect = false) {
         }
 
         // More lenient filtering: save all logs that have basic event data
-        const hasEventData = jsonData.logs || jsonData.exceptions;
+        const hasEventData =
+          (jsonData.logs && jsonData.logs.length > 0) ||
+          (jsonData.exceptions && jsonData.exceptions.length > 0);
 
         if (hasEventData) {
           saveLogToFile(jsonData);
           logManager.emit("newLog", jsonData);
-          console.log(
-            `Log saved: ${new Date().toISOString()} - Event: ${
-              jsonData.event?.request?.method || "unknown"
-            }`
-          );
         } else {
           // Log what's being filtered for debugging
-          console.log(
-            "Filtered log (no event data):",
-            JSON.stringify(jsonData).substring(0, 200) + "..."
-          );
+          // console.log(
+          //   "Filtered log (no event data):",
+          //   JSON.stringify(jsonData).substring(0, 200) + "..."
+          // );
         }
       } catch (error) {
         console.error("Error parsing WebSocket message:", error);
