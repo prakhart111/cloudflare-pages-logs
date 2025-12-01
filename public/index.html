@@ -343,6 +343,7 @@
         height: 500px;
         overflow-y: auto;
         background: var(--bg-secondary);
+        position: relative;
       }
 
       .logs-container::-webkit-scrollbar {
@@ -360,6 +361,40 @@
 
       .logs-container::-webkit-scrollbar-thumb:hover {
         background: var(--border-light);
+      }
+
+      .logs-loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(15, 15, 35, 0.85);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        z-index: 10;
+        backdrop-filter: blur(2px);
+      }
+
+      .logs-loading-overlay.show {
+        display: flex;
+      }
+
+      .loading-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid rgba(255, 255, 255, 0.2);
+        border-top: 3px solid var(--accent-primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 12px;
+      }
+
+      .logs-loading-text {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
       }
 
       .log-table-container {
@@ -1037,6 +1072,7 @@
                 <option value="25" selected>25 per page</option>
                 <option value="50">50 per page</option>
                 <option value="100">100 per page</option>
+                <option value="1000">1000 per page</option>
               </select>
               <button
                 class="btn btn-secondary"
@@ -1090,6 +1126,12 @@
             </div>
           </div>
           <div class="logs-container" id="logs-container">
+            <div class="logs-loading-overlay" id="logs-loading-overlay">
+              <div class="loading-spinner"></div>
+              <div class="logs-loading-text" id="logs-loading-text">
+                Loading logs...
+              </div>
+            </div>
             <div class="log-table-container">
               <table class="log-table" id="log-table">
                 <thead>
@@ -1130,6 +1172,7 @@
       let selectedLogFile = ""; // New: tracks currently selected log file
       let isLiveTailEnabled = true; // New: tracks live tail state
       let availableLogFiles = []; // New: stores list of available log files
+      let filterDebounceTimer = null;
 
       // JSON Syntax Highlighter Function
       function formatJsonWithSyntaxHighlighting(obj, indent = 0) {
@@ -1279,6 +1322,7 @@
 
       // Load logs with pagination
       async function loadLogs(page = 1, per_page = 25) {
+        showLogsLoading(true, "Fetching logs...");
         try {
           let url = `/api/logs?page=${page}&per_page=${per_page}`;
 
@@ -1321,6 +1365,8 @@
           }
         } catch (error) {
           console.error("Failed to load logs:", error);
+        } finally {
+          showLogsLoading(false);
         }
       }
 
@@ -1988,7 +2034,14 @@
 
       // Apply filters
       function applyFilters() {
-        renderTable();
+        showLogsLoading(true, "Applying filters...");
+        if (filterDebounceTimer) {
+          clearTimeout(filterDebounceTimer);
+        }
+        filterDebounceTimer = setTimeout(() => {
+          renderTable();
+          showLogsLoading(false);
+        }, 200);
       }
 
       // Show error message
@@ -2002,6 +2055,23 @@
       function hideError() {
         const errorEl = document.getElementById("error-message");
         errorEl.classList.remove("show");
+      }
+
+      function showLogsLoading(show, message = "Loading logs...") {
+        const overlay = document.getElementById("logs-loading-overlay");
+        const textEl = document.getElementById("logs-loading-text");
+
+        if (!overlay || !textEl) return;
+
+        if (message) {
+          textEl.textContent = message;
+        }
+
+        if (show) {
+          overlay.classList.add("show");
+        } else {
+          overlay.classList.remove("show");
+        }
       }
 
       // Toggle auto-connect functionality
