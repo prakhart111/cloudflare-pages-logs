@@ -1728,7 +1728,8 @@
         const timestamp = new Date(log.timestamp).toLocaleString();
         const eventType = request.method || "unknown";
         const outcome = logData.outcome || "unknown";
-        const displayUrl = formatDisplayUrl(logData.url);
+        // URL lives under event.request.url
+        const displayUrl = formatDisplayUrl(request.url);
         const wallTime = logData.wallTime || 0;
         const cpuTime = logData.cpuTime || 0;
         const duration = `${wallTime}ms (CPU: ${cpuTime}ms)`;
