@@ -1140,7 +1140,7 @@
                     <th>Timestamp</th>
                     <th>Event Type</th>
                     <th>Outcome</th>
-                    <th>Script Name</th>
+                    <th>URL</th>
                     <th>Duration (ms)</th>
                     <th>Details</th>
                   </tr>
@@ -1728,7 +1728,7 @@
         const timestamp = new Date(log.timestamp).toLocaleString();
         const eventType = request.method || "unknown";
         const outcome = logData.outcome || "unknown";
-        const scriptName = logData.scriptName || "N/A";
+        const displayUrl = formatDisplayUrl(logData.url);
         const wallTime = logData.wallTime || 0;
         const cpuTime = logData.cpuTime || 0;
         const duration = `${wallTime}ms (CPU: ${cpuTime}ms)`;
@@ -1749,12 +1749,31 @@
           <td>${timestamp}</td>
           <td>${eventType}</td>
           <td><span class="${outcomeClass}">${outcome}</span></td>
-          <td>${scriptName}</td>
+          <td>${displayUrl}</td>
           <td>${duration}</td>
           <td>${details}</td>
         `;
 
         return row;
+      }
+
+      // Format URL for display: remove base URL and show only path/query/hash.
+      // If url is missing, return "N/A".
+      function formatDisplayUrl(rawUrl) {
+        if (!rawUrl) {
+          return "N/A";
+        }
+
+        try {
+          const urlObj = new URL(rawUrl);
+          const path = urlObj.pathname || "/";
+          const search = urlObj.search || "";
+          const hash = urlObj.hash || "";
+          return `${path}${search}${hash}`;
+        } catch (e) {
+          // If it's not a full URL, fall back to the raw value
+          return rawUrl;
+        }
       }
 
       // Create details view for a log entry
