@@ -415,6 +415,7 @@ app.get("/api/logs", (req, res) => {
     const perPage = parseInt(req.query.per_page) || 25;
     const limit = parseInt(req.query.limit); // For backward compatibility
     const requestedFile = req.query.file; // New parameter for file selection
+    const onlyErrors = req.query.only_errors === "true"; // New parameter for filtering errors
 
     // Determine which log file to read from
     let targetLogFile;
@@ -437,10 +438,24 @@ app.get("/api/logs", (req, res) => {
 
     if (fs.existsSync(targetLogFile)) {
       const data = fs.readFileSync(targetLogFile, "utf8");
-      const lines = data
+      let lines = data
         .trim()
         .split("\n")
         .filter((line) => line);
+
+      // Filter for errors if requested
+      if (onlyErrors) {
+        lines = lines.filter((line) => {
+          try {
+            const entry = JSON.parse(line);
+            // Check for 4xx or 5xx status codes
+            const status = entry.data?.event?.response?.status;
+            return status && status >= 400;
+          } catch (e) {
+            return false;
+          }
+        });
+      }
 
       const totalLogs = lines.length;
 

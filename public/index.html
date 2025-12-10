@@ -1066,6 +1066,10 @@
                 <input type="checkbox" id="live-tail" checked />
                 Live Log Tail
               </label>
+              <label class="checkbox">
+                <input type="checkbox" id="show-errors-only" />
+                Show Errors Only
+              </label>
               <input type="text" id="log-filter" placeholder="Filter logs..." />
               <select id="per-page-select">
                 <option value="10">10 per page</option>
@@ -1171,6 +1175,7 @@
       let isPaginationMode = false;
       let selectedLogFile = ""; // New: tracks currently selected log file
       let isLiveTailEnabled = true; // New: tracks live tail state
+      let onlyErrors = false; // New: tracks error filter state
       let availableLogFiles = []; // New: stores list of available log files
       let filterDebounceTimer = null;
 
@@ -1263,6 +1268,7 @@
         const perPageSelect = document.getElementById("per-page-select");
         const logFileSelect = document.getElementById("log-file-select");
         const liveTailCheckbox = document.getElementById("live-tail");
+        const showErrorsCheckbox = document.getElementById("show-errors-only");
 
         filterInput.addEventListener("input", applyFilters);
 
@@ -1276,6 +1282,10 @@
 
         if (liveTailCheckbox) {
           liveTailCheckbox.addEventListener("change", onLiveTailToggle);
+        }
+
+        if (showErrorsCheckbox) {
+          showErrorsCheckbox.addEventListener("change", onShowErrorsChange);
         }
       }
 
@@ -1329,6 +1339,11 @@
           // Add file parameter if a specific file is selected
           if (selectedLogFile) {
             url += `&file=${encodeURIComponent(selectedLogFile)}`;
+          }
+
+          // Add only_errors parameter
+          if (onlyErrors) {
+            url += "&only_errors=true";
           }
 
           const response = await fetch(url);
@@ -2233,6 +2248,15 @@
           selectedLogFile = availableLogFiles[0].name;
           logFileSelect.value = selectedLogFile;
         }
+      }
+
+      // New: Handle show errors only toggle
+      function onShowErrorsChange() {
+        const showErrorsCheckbox = document.getElementById("show-errors-only");
+        if (!showErrorsCheckbox) return;
+
+        onlyErrors = showErrorsCheckbox.checked;
+        loadLogs(1, perPage);
       }
 
       // New: Handle log file selection change
